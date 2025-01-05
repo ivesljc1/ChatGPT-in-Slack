@@ -21,6 +21,7 @@ from app.env import (
 )
 from app.slack_ui import build_home_tab
 
+logging.getLogger("slack_sdk").setLevel(logging.DEBUG)
 
 if __name__ == "__main__":
     from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -31,6 +32,7 @@ if __name__ == "__main__":
         token=os.environ["SLACK_BOT_TOKEN"],
         before_authorize=before_authorize,
         process_before_response=True,
+        logger=logging.getLogger(__name__)
     )
     app.client.retry_handlers.append(RateLimitErrorRetryHandler(max_retry_count=2))
 
