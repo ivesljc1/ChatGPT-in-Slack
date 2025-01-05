@@ -69,3 +69,15 @@ int main(int argc, char *argv[])
     ]:
         result = format_openai_message_content(content, False)
         assert result == expected
+
+
+def test_billion_command_messages():
+    """Test that billion command messages are formatted correctly"""
+    messages = [
+        {"role": "system", "content": "test system content"},
+        {"role": "user", "content": "test billion preset prompt"}
+    ]
+    formatted = format_openai_message_content(messages)
+    assert len(formatted) > 0
+    assert "system" in formatted[0]["role"]
+    assert "user" in formatted[1]["role"]

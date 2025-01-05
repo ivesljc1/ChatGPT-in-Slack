@@ -17,6 +17,7 @@ from app.env import (
     SYSTEM_TEXT,
     TRANSLATE_MARKDOWN,
     OPENAI_IMAGE_GENERATION_MODEL,
+    BILLION_PRESET_PROMPT,
 )
 from app.i18n import translate
 from app.openai_image_ops import (
@@ -97,6 +98,12 @@ def respond_to_app_mention(
     client: WebClient,
     logger: logging.Logger,
 ):
+    # Check for billion command first
+    text = re.sub(f"<@{context.bot_user_id}>\\s*", "", payload.get("text", "")).strip()
+    if text == "/billion":
+        respond_to_billion_command(context, payload, client, logger)
+        return
+
     thread_ts = payload.get("thread_ts")
     if thread_ts is not None:
         parent_message = find_parent_message(client, context.channel_id, thread_ts)
@@ -1129,3 +1136,66 @@ def before_authorize(
         )
         return BoltResponse(status=200, body="")
     next_()
+
+
+def respond_to_billion_command(
+    context: BoltContext,
+    payload: dict,
+    client: WebClient,
+    logger: logging.Logger,
+):
+    """Handle the /billion command by sending a preset response
+    This command provides a quick way to get a predefined response"""
+    try:
+        # Post initial "typing" message
+        wip_reply = post_wip_message(
+            client=client,
+            channel=context.channel_id,
+            thread_ts=payload.get("thread_ts", payload.get("ts")),
+            loading_text=DEFAULT_LOADING_TEXT,
+            messages=[],
+            user=context.actor_user_id or context.user_id,
+        )
+        
+        # Prepare messages for OpenAI
+        system_text = build_system_text(SYSTEM_TEXT, TRANSLATE_MARKDOWN, context)
+        messages = [
+            {"role": "system", "content": system_text},
+            {"role": "user", "content": BILLION_PRESET_PROMPT}
+        ]
+
+        # Get OpenAI's response
+        stream = start_receiving_openai_response(
+            openai_api_key=context.get("OPENAI_API_KEY"),
+            model=context.get("OPENAI_MODEL"),
+            temperature=context.get("OPENAI_TEMPERATURE"),
+            messages=messages,
+            user=context.actor_user_id or context.user_id,
+            openai_api_type=context.get("OPENAI_API_TYPE"),
+            openai_api_base=context.get("OPENAI_API_BASE"),
+            openai_api_version=context.get("OPENAI_API_VERSION"),
+            openai_deployment_id=context.get("OPENAI_DEPLOYMENT_ID"),
+            openai_organization_id=context.get("OPENAI_ORG_ID"),
+            function_call_module_name=context.get("OPENAI_FUNCTION_CALL_MODULE_NAME"),
+        )
+
+        # Stream the response to Slack
+        consume_openai_stream_to_write_reply(
+            client=client,
+            wip_reply=wip_reply,
+            context=context,
+            user_id=context.actor_user_id or context.user_id,
+            messages=messages,
+            stream=stream,
+            timeout_seconds=OPENAI_TIMEOUT_SECONDS,
+            translate_markdown=TRANSLATE_MARKDOWN,
+        )
+
+    except Exception as e:
+        logger.exception(f"Error in billion command: {e}")
+        if wip_reply:
+            client.chat_update(
+                channel=wip_reply["channel"],
+                ts=wip_reply["ts"],
+                text=f"Error: {e}",
+            )

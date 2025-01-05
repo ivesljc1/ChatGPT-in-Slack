@@ -76,3 +76,7 @@ REDACT_SSN_PATTERN = os.environ.get(
 )
 # For REDACT_USER_DEFINED_PATTERN, the default will never match anything
 REDACT_USER_DEFINED_PATTERN = os.environ.get("REDACT_USER_DEFINED_PATTERN", r"(?!)")
+
+# Preset prompts
+DEFAULT_BILLION_PRESET_PROMPT = "Just reply with `This is a billion dollars`"
+BILLION_PRESET_PROMPT = os.environ.get("BILLION_PRESET_PROMPT", DEFAULT_BILLION_PRESET_PROMPT)
